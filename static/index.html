@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FastLAN</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; font-family: system-ui, sans-serif; background: #f2f4f7; color: #1c1e21; }
+  header { padding: 12px 16px; background: #2563eb; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 1.1rem; margin: 0; }
+  #status { font-size: .8rem; }
+  #feed { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { background: #fff; padding: 8px 12px; border-radius: 10px; max-width: 85%; word-break: break-word; white-space: pre-wrap; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+  .msg time { display: block; font-size: .7rem; color: #888; margin-top: 2px; }
+  .msg a { color: #2563eb; font-weight: 600; }
+  #drop { margin: 0 12px; padding: 10px; border: 2px dashed #9ca3af; border-radius: 10px; text-align: center; font-size: .85rem; color: #555; }
+  #drop.over { border-color: #2563eb; background: #dbeafe; }
+  form { display: flex; gap: 8px; padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  input[type=text] { flex: 1; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; }
+  button, label.btn { padding: 10px 14px; font-size: 1rem; border: 0; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; }
+  label.btn { background: #6b7280; }
+  input[type=file] { display: none; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #18191a; color: #e4e6eb; } .msg { background: #242526; } input[type=text] { background: #242526; color: #e4e6eb; border-color: #444; }
+    #drop { color: #aaa; }
+  }
+</style>
+</head>
+<body>
+<header><h1>FastLAN</h1><span id="status">connecting…</span></header>
+<div id="feed"></div>
+<div id="drop">Drop files here to share</div>
+<form id="form">
+  <label class="btn" for="picker">📎</label>
+  <input type="file" id="picker" multiple>
+  <input type="text" id="input" placeholder="Message…" autocomplete="off">
+  <button type="submit">Send</button>
+</form>
+<script>
+const feed = document.getElementById('feed'), status = document.getElementById('status');
+const input = document.getElementById('input'), drop = document.getElementById('drop');
+let ws, retry = 0;
+
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => { retry = 0; status.textContent = 'connected'; };
+  ws.onclose = () => {
+    status.textContent = 'reconnecting…';
+    setTimeout(connect, Math.min(1000 * 2 ** retry++, 10000));
+  };
+  ws.onmessage = e => add(JSON.parse(e.data));
+}
+
+function add(d) {
+  const div = document.createElement('div');
+  div.className = 'msg';
+  if (d.type === 'file') {
+    const a = document.createElement('a');
+    a.href = d.url; a.textContent = '📄 ' + d.name; a.download = '';
+    div.append(a, ' (' + (d.size / 1048576).toFixed(2) + ' MB)');
+  } else {
+    div.textContent = d.text;
+  }
+  const t = document.createElement('time');
+  t.textContent = new Date(d.time * 1000).toLocaleTimeString();
+  div.append(t);
+  const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+  feed.append(div);
+  if (atBottom) feed.scrollTop = feed.scrollHeight;
+}
+
+document.getElementById('form').onsubmit = e => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (text && ws.readyState === WebSocket.OPEN) { ws.send(text); input.value = ''; }
+};
+
+async function upload(files) {
+  for (const f of files) {
+    status.textContent = 'uploading ' + f.name + '…';
+    const fd = new FormData(); fd.append('file', f);
+    try {
+      const r = await fetch('/upload', { method: 'POST', body: fd });
+      if (!r.ok) alert((await r.json()).detail || 'Upload failed');
+    } catch { alert('Upload failed: ' + f.name); }
+    status.textContent = 'connected';
+  }
+}
+document.getElementById('picker').onchange = e => { upload(e.target.files); e.target.value = ''; };
+['dragenter', 'dragover'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
+document.addEventListener('drop', e => upload(e.dataTransfer.files));
+document.addEventListener('visibilitychange', () => { if (!document.hidden && ws.readyState > 1) connect(); });
+
+connect();
+</script>
+</body>
+</html>
