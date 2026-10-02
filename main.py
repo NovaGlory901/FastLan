@@ -55,6 +55,13 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# Anonymous "node" numbers, assigned per client IP in order of first contact.
+nodes: dict[str, int] = {}
+
+
+def node_for(ip: str) -> int:
+    return nodes.setdefault(ip, len(nodes) + 1)
+
 
 def sanitize_filename(name: str) -> str:
     name = Path(name.replace("\\", "/")).name
@@ -80,14 +87,16 @@ async def index():
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await manager.connect(ws)
+    node = node_for(ws.client.host)
     try:
+        await ws.send_json({"type": "hello", "node": node})
         while True:
             text = (await ws.receive_text()).strip()
             if not text:
                 continue
             text = text[:MAX_MESSAGE_LEN]
             log.info("Message from %s: %s", ws.client.host, text)
-            await manager.broadcast({"type": "message", "text": text, "time": time.time()})
+            await manager.broadcast({"type": "message", "node": node, "text": text, "time": time.time()})
     except WebSocketDisconnect:
         pass
     finally:
@@ -118,7 +127,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
         raise HTTPException(500, "Upload failed")
     log.info("File uploaded by %s: %s (%d bytes) -> %s", client, safe, size, stored)
     await manager.broadcast(
-        {"type": "file", "name": safe, "url": f"/files/{stored}", "size": size, "time": time.time()}
+        {"type": "file", "node": node_for(client), "name": safe, "url": f"/files/{stored}", "size": size, "time": time.time()}
     )
     return {"ok": True, "url": f"/files/{stored}"}
 

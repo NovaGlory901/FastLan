@@ -3,97 +3,219 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>FastLAN</title>
+<title>FastLAN BBS</title>
 <style>
+  /* Classic 16-colour ANSI (CGA) palette */
+  :root {
+    --c0:#000000; --c1:#aa0000; --c2:#00aa00; --c3:#aa5500; --c4:#0000aa; --c5:#aa00aa; --c6:#00aaaa; --c7:#aaaaaa;
+    --c8:#555555; --c9:#ff5555; --c10:#55ff55; --c11:#ffff55; --c12:#5555ff; --c13:#ff55ff; --c14:#55ffff; --c15:#ffffff;
+  }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
-  body { display: flex; flex-direction: column; font-family: system-ui, sans-serif; background: #f2f4f7; color: #1c1e21; }
-  header { padding: 12px 16px; background: #2563eb; color: #fff; display: flex; justify-content: space-between; align-items: center; }
-  header h1 { font-size: 1.1rem; margin: 0; }
-  #status { font-size: .8rem; }
-  #feed { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .msg { background: #fff; padding: 8px 12px; border-radius: 10px; max-width: 85%; word-break: break-word; white-space: pre-wrap; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
-  .msg time { display: block; font-size: .7rem; color: #888; margin-top: 2px; }
-  .msg a { color: #2563eb; font-weight: 600; }
-  #drop { margin: 0 12px; padding: 10px; border: 2px dashed #9ca3af; border-radius: 10px; text-align: center; font-size: .85rem; color: #555; }
-  #drop.over { border-color: #2563eb; background: #dbeafe; }
-  form { display: flex; gap: 8px; padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
-  input[type=text] { flex: 1; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; }
-  button, label.btn { padding: 10px 14px; font-size: 1rem; border: 0; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; }
-  label.btn { background: #6b7280; }
-  input[type=file] { display: none; }
-  @media (prefers-color-scheme: dark) {
-    body { background: #18191a; color: #e4e6eb; } .msg { background: #242526; } input[type=text] { background: #242526; color: #e4e6eb; border-color: #444; }
-    #drop { color: #aaa; }
+  body {
+    display: flex; flex-direction: column; background: var(--c0); color: var(--c7);
+    font: 16px/1.35 "Courier New", ui-monospace, Menlo, Consolas, monospace;
+    padding: 8px; padding-bottom: calc(8px + env(safe-area-inset-bottom));
   }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,.15) 0 1px, transparent 1px 3px); }
+  pre { margin: 0; font: inherit; white-space: pre; overflow: hidden; }
+  #banner { text-align: center; font-size: clamp(7px, 2.2vw, 14px); line-height: 1.1; }
+  #bar { display: flex; justify-content: space-between; gap: 8px; background: var(--c4); color: var(--c15); padding: 2px 6px; margin: 6px 0; font-size: .85rem; }
+  #bar button { background: none; border: 0; color: var(--c14); font: inherit; cursor: pointer; padding: 0; }
+  #bar button:hover { color: var(--c15); }
+  #feed { flex: 1; overflow-y: auto; border: 1px solid var(--c6); padding: 6px 8px; min-height: 0; }
+  .line { word-break: break-word; white-space: pre-wrap; }
+  .ts { color: var(--c8); }
+  .sys { color: var(--c6); }
+  .err { color: var(--c9); }
+  .sysname { color: var(--c11); }
+  .line a { color: var(--c14); }
+  .line a:hover, .line a:focus { background: var(--c14); color: var(--c0); outline: 0; }
+  #drop { margin: 6px 0; padding: 3px; border: 1px dashed var(--c8); text-align: center; font-size: .85rem; color: var(--c8); }
+  #drop.over { border-color: var(--c10); color: var(--c10); }
+  form { display: flex; align-items: center; gap: 8px; background: #111; padding: 2px 6px; border: 1px solid var(--c8); }
+  form.file { border-color: var(--c11); }
+  #mode { font-weight: bold; padding: 0 4px; white-space: nowrap; background: var(--c2); color: var(--c0); }
+  form.file #mode { background: var(--c11); }
+  #input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--c15); font: inherit; font-size: 16px; padding: 6px 0; }
+  form.file #input { color: var(--c11); }
+  .btn { background: none; border: 0; color: var(--c14); font: inherit; cursor: pointer; padding: 6px 0; white-space: nowrap; }
+  .btn:hover, .btn:focus { background: var(--c14); color: var(--c0); outline: 0; }
+  #cancel { display: none; color: var(--c9); }
+  #cancel:hover, #cancel:focus { background: var(--c9); color: var(--c0); }
+  form.file #cancel { display: inline; }
+  form.file #attach { display: none; }
+  input[type=file] { display: none; }
+  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: var(--c6); } ::-webkit-scrollbar-track { background: var(--c0); }
 </style>
 </head>
 <body>
-<header><h1>FastLAN</h1><span id="status">connecting…</span></header>
-<div id="feed"></div>
-<div id="drop">Drop files here to share</div>
-<form id="form">
-  <label class="btn" for="picker">📎</label>
+<pre id="banner"><span style="color:var(--c12)">╔══════════════════════════════════════╗</span>
+<span style="color:var(--c12)">║</span><span style="color:var(--c9)">  ░█▀▀░█▀█░█▀▀░▀█▀░</span><span style="color:var(--c11)">█░░░█▀█░█▀█</span><span style="color:var(--c12)">        ║</span>
+<span style="color:var(--c12)">║</span><span style="color:var(--c13)">  ░█▀▀░█▀█░▀▀█░░█░░</span><span style="color:var(--c10)">█░░░█▀█░█░█</span><span style="color:var(--c12)">        ║</span>
+<span style="color:var(--c12)">║</span><span style="color:var(--c14)">  ░▀░░░▀░▀░▀▀▀░░▀░░</span><span style="color:var(--c15)">▀▀▀░▀░▀░▀░▀  BBS</span><span style="color:var(--c12)">   ║</span>
+<span style="color:var(--c12)">╚══════════════════════════════════════╝</span></pre>
+<div id="bar">
+  <span id="status">DIALING...</span>
+  <span id="node"></span>
+  <button id="snd" type="button" title="Toggle sound">[SND ON]</button>
+</div>
+<div id="feed" aria-live="polite"></div>
+<div id="drop">[ DROP FILES HERE TO UPLOAD ]</div>
+<form id="form" autocomplete="off">
+  <span id="mode">MSG</span>
+  <input type="text" id="input" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus>
+  <label class="btn" id="attach" for="picker" tabindex="0">[FILE]</label>
   <input type="file" id="picker" multiple>
-  <input type="text" id="input" placeholder="Message…" autocomplete="off">
-  <button type="submit">Send</button>
+  <button class="btn" id="cancel" type="button">[X]</button>
+  <button class="btn" type="submit" id="send">[SEND]</button>
 </form>
 <script>
-const feed = document.getElementById('feed'), status = document.getElementById('status');
-const input = document.getElementById('input'), drop = document.getElementById('drop');
-let ws, retry = 0;
+const $ = id => document.getElementById(id);
+const feed = $('feed'), status = $('status'), input = $('input'), drop = $('drop'),
+      form = $('form'), mode = $('mode'), sendBtn = $('send');
+const NODE_COLORS = [10, 14, 11, 13, 12, 9, 15, 2, 6, 3, 5];  // CSS var indexes for --cN
+let ws, retry = 0, myNode = null, staged = [], uploading = false, soundOn = true;
 
+try { soundOn = localStorage.getItem('sound') !== 'off'; } catch {}
+const sndBtn = $('snd');
+function showSnd() { sndBtn.textContent = soundOn ? '[SND ON]' : '[SND OFF]'; }
+showSnd();
+sndBtn.onclick = () => {
+  soundOn = !soundOn; showSnd();
+  try { localStorage.setItem('sound', soundOn ? 'on' : 'off'); } catch {}
+  if (soundOn) beep([[880, 0.07]]);
+};
+
+/* ---------- sound (WebAudio square-wave beeps) ---------- */
+let actx;
+function beep(seq) {
+  if (!soundOn) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    let t = actx.currentTime;
+    for (const [freq, dur] of seq) {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'square'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur);
+      t += dur;
+    }
+  } catch {}
+}
+// browsers only allow audio after a user gesture
+['pointerdown', 'keydown'].forEach(n => document.addEventListener(n, () => { if (actx && actx.state === 'suspended') actx.resume(); }, { once: false }));
+const SND = { msg: [[1200, 0.06], [900, 0.06]], file: [[600, 0.08], [800, 0.08], [1000, 0.1]], connect: [[1400, 0.08], [1800, 0.08], [1400, 0.08], [2100, 0.12]], drop: [[400, 0.15], [250, 0.2]] };
+
+/* ---------- connection ---------- */
 function connect() {
+  status.textContent = 'DIALING...'; status.style.color = 'var(--c11)';
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-  ws.onopen = () => { retry = 0; status.textContent = 'connected'; };
+  ws.onopen = () => { retry = 0; status.textContent = 'CARRIER DETECTED'; status.style.color = 'var(--c10)'; sys('*** CONNECT 57600 ***'); beep(SND.connect); };
   ws.onclose = () => {
-    status.textContent = 'reconnecting…';
+    status.textContent = 'NO CARRIER'; status.style.color = 'var(--c9)';
+    if (retry === 0) { sys('*** NO CARRIER - REDIALING ***', 'err'); beep(SND.drop); }
     setTimeout(connect, Math.min(1000 * 2 ** retry++, 10000));
   };
-  ws.onmessage = e => add(JSON.parse(e.data));
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.type === 'hello') { myNode = d.node; $('node').textContent = 'YOU: NODE ' + String(myNode).padStart(2, '0'); return; }
+    add(d);
+    if (d.node !== myNode) beep(d.type === 'file' ? SND.file : SND.msg);
+  };
 }
+
+/* ---------- feed ---------- */
+function span(cls, text, color) { const s = document.createElement('span'); if (cls) s.className = cls; if (color) s.style.color = color; s.textContent = text; return s; }
+function sys(text, cls = 'sys') { add({ type: 'sys', cls, text, time: Date.now() / 1000 }); }
+function nodeTag(n) { return '<NODE ' + String(n).padStart(2, '0') + '> '; }
+function nodeColor(n) { return 'var(--c' + NODE_COLORS[(n - 1) % NODE_COLORS.length] + ')'; }
 
 function add(d) {
   const div = document.createElement('div');
-  div.className = 'msg';
+  div.className = 'line';
+  const ts = new Date(d.time * 1000).toLocaleTimeString([], { hour12: false });
+  div.append(span('ts', '[' + ts + '] '));
   if (d.type === 'file') {
     const a = document.createElement('a');
-    a.href = d.url; a.textContent = '📄 ' + d.name; a.download = '';
-    div.append(a, ' (' + (d.size / 1048576).toFixed(2) + ' MB)');
+    a.href = d.url; a.download = ''; a.textContent = '[DOWNLOAD]';
+    div.append(span('', nodeTag(d.node), nodeColor(d.node)), span('sysname', 'sent file '), span('', d.name + ' (' + (d.size / 1048576).toFixed(2) + ' MB) ', 'var(--c15)'), a);
+  } else if (d.type === 'sys') {
+    div.classList.add(d.cls); div.append(d.text);
   } else {
-    div.textContent = d.text;
+    div.append(span('', nodeTag(d.node), nodeColor(d.node)), span('', d.text, 'var(--c15)'));
   }
-  const t = document.createElement('time');
-  t.textContent = new Date(d.time * 1000).toLocaleTimeString();
-  div.append(t);
   const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
   feed.append(div);
   if (atBottom) feed.scrollTop = feed.scrollHeight;
 }
 
-document.getElementById('form').onsubmit = e => {
+/* ---------- input bar: MSG mode vs FILE mode ---------- */
+function setMode() {
+  const file = staged.length > 0 || uploading;
+  form.classList.toggle('file', file);
+  mode.textContent = uploading ? 'XFER' : file ? 'FILE' : 'MSG';
+  input.readOnly = file;
+  if (!file) { input.placeholder = 'type a message...'; input.value = ''; }
+  else if (!uploading) {
+    input.value = staged.map(f => f.name + ' (' + (f.size / 1048576).toFixed(2) + ' MB)').join(', ');
+    input.placeholder = '';
+  }
+  sendBtn.textContent = file ? '[UPLOAD]' : '[SEND]';
+}
+function stage(files) {
+  if (uploading) return;
+  staged = [...files];
+  setMode();
+  if (staged.length) sendBtn.focus();
+}
+$('cancel').onclick = () => { if (!uploading) { staged = []; setMode(); input.focus(); } };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && staged.length && !uploading) { staged = []; setMode(); } });
+$('picker').onchange = e => { stage(e.target.files); e.target.value = ''; };
+
+form.onsubmit = async e => {
   e.preventDefault();
+  if (uploading) return;
+  if (staged.length) { await uploadAll(); return; }
   const text = input.value.trim();
   if (text && ws.readyState === WebSocket.OPEN) { ws.send(text); input.value = ''; }
+  input.focus();
 };
 
-async function upload(files) {
-  for (const f of files) {
-    status.textContent = 'uploading ' + f.name + '…';
-    const fd = new FormData(); fd.append('file', f);
-    try {
-      const r = await fetch('/upload', { method: 'POST', body: fd });
-      if (!r.ok) alert((await r.json()).detail || 'Upload failed');
-    } catch { alert('Upload failed: ' + f.name); }
-    status.textContent = 'connected';
-  }
+function uploadOne(f) {
+  return new Promise(resolve => {
+    const xhr = new XMLHttpRequest(), fd = new FormData();
+    fd.append('file', f);
+    xhr.open('POST', '/upload');
+    xhr.upload.onprogress = e => {
+      if (!e.lengthComputable) return;
+      const pct = Math.floor(e.loaded / e.total * 100), n = Math.round(pct / 5);
+      input.value = f.name + ' [' + '█'.repeat(n) + '░'.repeat(20 - n) + '] ' + pct + '%';
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(true);
+      let msg = 'upload failed'; try { msg = JSON.parse(xhr.responseText).detail || msg; } catch {}
+      sys('*** XFER ERROR: ' + f.name + ' - ' + msg + ' ***', 'err'); resolve(false);
+    };
+    xhr.onerror = () => { sys('*** XFER ERROR: ' + f.name + ' ***', 'err'); resolve(false); };
+    xhr.send(fd);
+  });
 }
-document.getElementById('picker').onchange = e => { upload(e.target.files); e.target.value = ''; };
+async function uploadAll() {
+  uploading = true; const list = staged; staged = []; setMode();
+  for (const f of list) await uploadOne(f);
+  uploading = false; setMode(); input.focus();
+}
+
+/* drag & drop stages files too */
 ['dragenter', 'dragover'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
-document.addEventListener('drop', e => upload(e.dataTransfer.files));
+document.addEventListener('drop', e => { if (e.dataTransfer.files.length) stage(e.dataTransfer.files); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && ws.readyState > 1) connect(); });
 
+setMode();
 connect();
 </script>
 </body>
