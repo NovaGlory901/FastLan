@@ -41,7 +41,7 @@
       flex-direction: column;
       background: var(--c0);
       color: var(--c7);
-      font: 16px/1.35 "Courier New", ui-monospace, Menlo, Consolas, monospace;
+      font: var(--fs, 16px)/1.35 "Courier New", ui-monospace, Menlo, Consolas, monospace;
       padding: 8px;
       padding-bottom: calc(8px + env(safe-area-inset-bottom));
     }
@@ -52,6 +52,14 @@
       inset: 0;
       pointer-events: none;
       background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, .15) 0 1px, transparent 1px 3px);
+    }
+
+    body.noscan::after {
+      display: none;
+    }
+
+    body.nots .ts {
+      display: none;
     }
 
     pre {
@@ -170,6 +178,36 @@
       background: var(--c11);
     }
 
+    #to {
+      max-width: 9em;
+      background: #111;
+      color: var(--c15);
+      border: 1px solid var(--c8);
+      font: inherit;
+      font-size: 14px;
+      padding: 2px;
+    }
+
+    form.dm {
+      border-color: var(--c13);
+    }
+
+    form.dm #mode {
+      background: var(--c13);
+    }
+
+    form.file #to {
+      display: none;
+    }
+
+    .dm-line {
+      color: var(--c13);
+    }
+
+    .tag {
+      cursor: pointer;
+    }
+
     #input {
       flex: 1;
       min-width: 0;
@@ -226,6 +264,83 @@
       display: none;
     }
 
+    #settings {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      background: rgba(0, 0, 0, .8);
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+    }
+
+    #settings.open {
+      display: flex;
+    }
+
+    #panel {
+      width: min(460px, 100%);
+      max-height: 100%;
+      overflow-y: auto;
+      background: var(--c0);
+      border: 3px double var(--c12);
+      padding: 0 0 8px;
+    }
+
+    #panel h2 {
+      margin: 0 0 8px;
+      padding: 2px 8px;
+      font: inherit;
+      background: var(--c4);
+      color: var(--c15);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 10px;
+    }
+
+    .row label {
+      color: var(--c11);
+    }
+
+    .row select,
+    .row input[type=range] {
+      width: 160px;
+      background: #111;
+      color: var(--c15);
+      border: 1px solid var(--c8);
+      font: inherit;
+      font-size: 16px;
+      accent-color: var(--c10);
+    }
+
+    .row .btn {
+      padding: 2px 0;
+    }
+
+    #swatch {
+      display: flex;
+      padding: 4px 10px;
+    }
+
+    #swatch i {
+      flex: 1;
+      height: 14px;
+    }
+
+    #panel .foot {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 10px 0;
+    }
+
     ::-webkit-scrollbar {
       width: 8px;
     }
@@ -249,39 +364,124 @@
   <div id="bar">
     <span id="status">DIALING...</span>
     <span id="node"></span>
-    <button id="snd" type="button" title="Toggle sound">[SND ON]</button>
+    <span>
+      <button id="snd" type="button" title="Toggle sound">[SND ON]</button>
+      <button id="set" type="button" title="Settings">[SET]</button>
+    </span>
   </div>
   <div id="feed" aria-live="polite"></div>
   <div id="drop">[ DROP FILES HERE TO UPLOAD ]</div>
   <form id="form" autocomplete="off">
     <span id="mode">MSG</span>
+    <select id="to" title="Send to" aria-label="Send to"></select>
     <input type="text" id="input" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus>
     <label class="btn" id="attach" for="picker" tabindex="0">[FILE]</label>
     <input type="file" id="picker" multiple>
     <button class="btn" id="cancel" type="button">[X]</button>
     <button class="btn" type="submit" id="send">[SEND]</button>
   </form>
+  <div id="settings" role="dialog" aria-modal="true" aria-label="Settings">
+    <div id="panel">
+      <h2><span>== SETTINGS ==</span><button class="btn" id="setclose" type="button">[X]</button></h2>
+      <div class="row"><label for="s-sound">Sound</label><button class="btn" id="s-sound" type="button"></button></div>
+      <div class="row"><label for="s-vol">Volume</label><input type="range" id="s-vol" min="0" max="100" step="5"></div>
+      <div class="row"><label for="s-theme">Palette</label><select id="s-theme"></select></div>
+      <div id="swatch"></div>
+      <div class="row"><label for="s-scan">Scanlines</label><button class="btn" id="s-scan" type="button"></button></div>
+      <div class="row"><label for="s-ts">Timestamps</label><button class="btn" id="s-ts" type="button"></button></div>
+      <div class="row"><label for="s-alerts">Desktop alerts</label><button class="btn" id="s-alerts" type="button"></button></div>
+      <div class="row"><label for="s-font">Font size</label><select id="s-font"></select></div>
+      <div class="foot">
+        <button class="btn" id="s-test" type="button">[TEST BEEP]</button>
+        <button class="btn" id="s-reset" type="button">[RESET]</button>
+      </div>
+    </div>
+  </div>
   <script>
     const $ = id => document.getElementById(id);
     const feed = $('feed'), status = $('status'), input = $('input'), drop = $('drop'),
       form = $('form'), mode = $('mode'), sendBtn = $('send');
     const NODE_COLORS = [10, 14, 11, 13, 12, 9, 15, 2, 6, 3, 5];  // CSS var indexes for --cN
-    let ws, retry = 0, myNode = null, staged = [], uploading = false, soundOn = true;
+    let ws, retry = 0, myNode = null, online = [], staged = [], uploading = false;
 
-    try { soundOn = localStorage.getItem('sound') !== 'off'; } catch { }
-    const sndBtn = $('snd');
-    function showSnd() { sndBtn.textContent = soundOn ? '[SND ON]' : '[SND OFF]'; }
-    showSnd();
-    sndBtn.onclick = () => {
-      soundOn = !soundOn; showSnd();
-      try { localStorage.setItem('sound', soundOn ? 'on' : 'off'); } catch { }
-      if (soundOn) beep([[880, 0.07]]);
+    /* ---------- settings (kept in this browser only, never on the server) ---------- */
+    const CGA = ['#000000', '#aa0000', '#00aa00', '#aa5500', '#0000aa', '#aa00aa', '#00aaaa', '#aaaaaa',
+      '#555555', '#ff5555', '#55ff55', '#ffff55', '#5555ff', '#ff55ff', '#55ffff', '#ffffff'];
+    // single-colour phosphor palettes: each CGA colour becomes a shade by its luminance
+    function mono(r, g, b) {
+      return CGA.map(hex => {
+        const n = parseInt(hex.slice(1), 16), lum = (0.3 * (n >> 16) + 0.59 * (n >> 8 & 255) + 0.11 * (n & 255)) / 255;
+        const k = lum === 0 ? 0 : 0.18 + 0.82 * lum;
+        return '#' + [r, g, b].map(v => Math.round(v * k).toString(16).padStart(2, '0')).join('');
+      });
+    }
+    const THEMES = {
+      classic: ['Classic CGA', CGA],
+      green: ['Green phosphor', mono(60, 255, 90)],
+      amber: ['Amber', mono(255, 176, 0)],
+      cyan: ['Ice cyan', mono(80, 230, 255)],
+      white: ['Mono white', mono(235, 235, 235)],
     };
+    const FONTS = { 13: 'Small', 16: 'Normal', 19: 'Large', 22: 'Huge' };
+    const DEFAULTS = { sound: true, volume: 50, theme: 'classic', scanlines: true, timestamps: true, font: 16, alerts: false };
+    let cfg = { ...DEFAULTS };
+    try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('fastlan.settings')) }; } catch { }
+    if (!THEMES[cfg.theme]) cfg.theme = DEFAULTS.theme;
+    if (!FONTS[cfg.font]) cfg.font = DEFAULTS.font;
+    const sndBtn = $('snd'), onoff = v => v ? '[ON]' : '[OFF]';
+
+    function applySettings() {
+      THEMES[cfg.theme][1].forEach((c, i) => document.documentElement.style.setProperty('--c' + i, c));
+      document.body.classList.toggle('noscan', !cfg.scanlines);
+      document.body.classList.toggle('nots', !cfg.timestamps);
+      document.body.style.setProperty('--fs', cfg.font + 'px');
+      sndBtn.textContent = cfg.sound ? '[SND ON]' : '[SND OFF]';
+      $('s-sound').textContent = onoff(cfg.sound);
+      $('s-scan').textContent = onoff(cfg.scanlines);
+      $('s-ts').textContent = onoff(cfg.timestamps);
+      $('s-alerts').textContent = onoff(cfg.alerts);
+      $('s-vol').value = cfg.volume;
+      $('s-theme').value = cfg.theme;
+      $('s-font').value = cfg.font;
+      $('swatch').replaceChildren(...THEMES[cfg.theme][1].map(c => { const i = document.createElement('i'); i.style.background = c; return i; }));
+    }
+    function update(patch) {
+      Object.assign(cfg, patch); applySettings();
+      try { localStorage.setItem('fastlan.settings', JSON.stringify(cfg)); } catch { }
+    }
+    for (const [k, v] of Object.entries(THEMES)) $('s-theme').add(new Option(v[0], k));
+    for (const [k, v] of Object.entries(FONTS)) $('s-font').add(new Option(v, k));
+
+    const settings = $('settings');
+    function openSettings() { settings.classList.add('open'); $('setclose').focus(); }
+    function closeSettings() { settings.classList.remove('open'); input.focus(); }
+    $('set').onclick = openSettings;
+    $('setclose').onclick = closeSettings;
+    settings.onclick = e => { if (e.target === settings) closeSettings(); };
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && settings.classList.contains('open')) closeSettings(); });
+    sndBtn.onclick = () => { update({ sound: !cfg.sound }); beep(SND.test); };
+    $('s-sound').onclick = sndBtn.onclick;
+    $('s-vol').oninput = e => update({ volume: +e.target.value });
+    $('s-vol').onchange = () => beep(SND.test);
+    $('s-theme').onchange = e => update({ theme: e.target.value });
+    $('s-scan').onclick = () => update({ scanlines: !cfg.scanlines });
+    $('s-alerts').onclick = async () => {
+      if (cfg.alerts) return update({ alerts: false });
+      if (!('Notification' in window)) return sys('*** Desktop alerts are not supported by this browser ***', 'err');
+      const perm = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+      if (perm === 'granted') update({ alerts: true });
+      else sys('*** Desktop alerts blocked - allow notifications for this site in your browser ***', 'err');
+    };
+    $('s-ts').onclick = () => update({ timestamps: !cfg.timestamps });
+    $('s-font').onchange = e => update({ font: +e.target.value });
+    $('s-test').onclick = () => beep(SND.connect);
+    $('s-reset').onclick = () => update({ ...DEFAULTS });
+    applySettings();
 
     /* ---------- sound (WebAudio square-wave beeps) ---------- */
     let actx;
     function beep(seq) {
-      if (!soundOn) return;
+      if (!cfg.sound || !cfg.volume) return;
       try {
         actx = actx || new (window.AudioContext || window.webkitAudioContext)();
         if (actx.state === 'suspended') actx.resume();
@@ -289,7 +489,7 @@
         for (const [freq, dur] of seq) {
           const o = actx.createOscillator(), g = actx.createGain();
           o.type = 'square'; o.frequency.value = freq;
-          g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+          g.gain.setValueAtTime(0.1 * cfg.volume / 100, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
           o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur);
           t += dur;
         }
@@ -297,13 +497,13 @@
     }
     // browsers only allow audio after a user gesture
     ['pointerdown', 'keydown'].forEach(n => document.addEventListener(n, () => { if (actx && actx.state === 'suspended') actx.resume(); }, { once: false }));
-    const SND = { msg: [[1200, 0.06], [900, 0.06]], file: [[600, 0.08], [800, 0.08], [1000, 0.1]], connect: [[1400, 0.08], [1800, 0.08], [1400, 0.08], [2100, 0.12]], drop: [[400, 0.15], [250, 0.2]] };
+    const SND = { test: [[880, 0.07]], msg: [[1200, 0.06], [900, 0.06]], file: [[600, 0.08], [800, 0.08], [1000, 0.1]], connect: [[1400, 0.08], [1800, 0.08], [1400, 0.08], [2100, 0.12]], drop: [[400, 0.15], [250, 0.2]] };
 
     /* ---------- connection ---------- */
     function connect() {
       status.textContent = 'DIALING...'; status.style.color = 'var(--c11)';
       ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-      ws.onopen = () => { retry = 0; status.textContent = 'CARRIER DETECTED'; status.style.color = 'var(--c10)'; sys('*** CONNECT 57600 ***'); beep(SND.connect); };
+      ws.onopen = () => { retry = 0; status.textContent = 'CARRIER DETECTED'; status.style.color = 'var(--c10)'; sys('*** CONNECT 57600 *** (type /help for commands)'); beep(SND.connect); };
       ws.onclose = () => {
         status.textContent = 'NO CARRIER'; status.style.color = 'var(--c9)';
         if (retry === 0) { sys('*** NO CARRIER - REDIALING ***', 'err'); beep(SND.drop); }
@@ -311,16 +511,71 @@
       };
       ws.onmessage = e => {
         const d = JSON.parse(e.data);
-        if (d.type === 'hello') { myNode = d.node; $('node').textContent = 'YOU: NODE ' + String(myNode).padStart(2, '0'); return; }
+        if (d.type === 'hello') { myNode = d.node; return; }
+        if (d.type === 'users') { setUsers(d.nodes); return; }
+        if (d.type === 'error') { sys('*** ' + d.text + ' ***', 'err'); return; }
         add(d);
-        if (d.node !== myNode) beep(d.type === 'file' ? SND.file : SND.msg);
+        if ((d.type === 'dm' ? d.from : d.node) !== myNode) notify(d);
+        if ((d.type === 'dm' ? d.from : d.node) !== myNode) beep(d.type === 'file' ? SND.file : SND.msg);
       };
     }
+
+    /* ---------- unread notifications ---------- */
+    const TITLE = document.title;
+    let unread = 0, unreadDM = false, flash;
+    const away = () => document.hidden || !document.hasFocus();
+    function showTitle(alt) {
+      document.title = unread ? (alt ? '\u2709 ' : '') + '(' + unread + (unreadDM ? ' DM' : '') + ') ' + TITLE : TITLE;
+    }
+    function notify(d) {
+      if (!away()) return;
+      unread++; if (d.type === 'dm') unreadDM = true;
+      showTitle(false);
+      if (unreadDM && !flash) { let on = false; flash = setInterval(() => showTitle(on = !on), 1000); }
+      if (cfg.alerts && 'Notification' in window && Notification.permission === 'granted' && (d.type === 'dm' || d.type === 'message' || d.type === 'file')) {
+        const who = 'NODE ' + pad(d.type === 'dm' ? d.from : d.node);
+        const body = d.type === 'file' ? 'sent file ' + d.name : d.text;
+        try {
+          const n = new Notification(d.type === 'dm' ? 'Private message from ' + who : who, { body, tag: d.type === 'dm' ? 'fastlan-dm' : 'fastlan' });
+          n.onclick = () => { window.focus(); n.close(); };
+        } catch { }
+      }
+    }
+    function clearUnread() {
+      if (away()) return;
+      unread = 0; unreadDM = false; clearInterval(flash); flash = null; showTitle(false);
+    }
+    window.addEventListener('focus', clearUnread);
+    document.addEventListener('visibilitychange', clearUnread);
 
     /* ---------- feed ---------- */
     function span(cls, text, color) { const s = document.createElement('span'); if (cls) s.className = cls; if (color) s.style.color = color; s.textContent = text; return s; }
     function sys(text, cls = 'sys') { add({ type: 'sys', cls, text, time: Date.now() / 1000 }); }
-    function nodeTag(n) { return '<NODE ' + String(n).padStart(2, '0') + '> '; }
+    const pad = n => String(n).padStart(2, '0');
+    function nodeTag(n) { return '<NODE ' + pad(n) + '> '; }
+    function tag(n) { const s = span('tag', nodeTag(n), nodeColor(n)); s.dataset.node = n; return s; }
+
+    /* ---------- online users + recipient ---------- */
+    const to = $('to');
+    let seenUsers = false;
+    function setUsers(nodes) {
+      if (seenUsers) {
+        for (const n of nodes) if (!online.includes(n) && n !== myNode) sys('*** NODE ' + pad(n) + ' joined ***');
+        for (const n of online) if (!nodes.includes(n) && n !== myNode) sys('*** NODE ' + pad(n) + ' left ***');
+      }
+      online = nodes; seenUsers = true;
+      $('node').textContent = 'YOU: NODE ' + pad(myNode) + ' | ONLINE: ' + nodes.length;
+      const keep = to.value;
+      to.replaceChildren(new Option('TO: ALL', ''), ...nodes.filter(n => n !== myNode).map(n => new Option('TO: NODE ' + pad(n) + ' (private)', n)));
+      to.value = [...to.options].some(o => o.value === keep) ? keep : '';
+      setMode();
+    }
+    to.onchange = () => { setMode(); input.focus(); };
+    // click a node tag in the feed to message that node privately
+    feed.addEventListener('click', e => {
+      const n = e.target.dataset && e.target.dataset.node;
+      if (n && +n !== myNode && online.includes(+n) && !staged.length && !uploading) { to.value = n; setMode(); input.focus(); }
+    });
     function nodeColor(n) { return 'var(--c' + NODE_COLORS[(n - 1) % NODE_COLORS.length] + ')'; }
 
     function add(d) {
@@ -331,11 +586,14 @@
       if (d.type === 'file') {
         const a = document.createElement('a');
         a.href = d.url; a.download = ''; a.textContent = '[DOWNLOAD]';
-        div.append(span('', nodeTag(d.node), nodeColor(d.node)), span('sysname', 'sent file '), span('', d.name + ' (' + (d.size / 1048576).toFixed(2) + ' MB) ', 'var(--c15)'), a);
+        div.append(tag(d.node), span('sysname', 'sent file '), span('', d.name + ' (' + (d.size / 1048576).toFixed(2) + ' MB) ', 'var(--c15)'), a);
+      } else if (d.type === 'dm') {
+        div.classList.add('dm-line');
+        div.append(span('', '(private) ', 'var(--c13)'), tag(d.from), span('', '-> ', 'var(--c8)'), tag(d.to), span('', d.text, 'var(--c15)'));
       } else if (d.type === 'sys') {
         div.classList.add(d.cls); div.append(d.text);
       } else {
-        div.append(span('', nodeTag(d.node), nodeColor(d.node)), span('', d.text, 'var(--c15)'));
+        div.append(tag(d.node), span('', d.text, 'var(--c15)'));
       }
       const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
       feed.append(div);
@@ -345,10 +603,12 @@
     /* ---------- input bar: MSG mode vs FILE mode ---------- */
     function setMode() {
       const file = staged.length > 0 || uploading;
+      const dm = !file && to.value !== '';
       form.classList.toggle('file', file);
-      mode.textContent = uploading ? 'XFER' : file ? 'FILE' : 'MSG';
+      form.classList.toggle('dm', dm);
+      mode.textContent = uploading ? 'XFER' : file ? 'FILE' : dm ? 'DM' : 'MSG';
       input.readOnly = file;
-      if (!file) { input.placeholder = 'type a message...'; input.value = ''; }
+      if (!file) { input.placeholder = to.value ? 'private message to node ' + pad(to.value) + '...' : 'type a message...'; input.value = ''; }
       else if (!uploading) {
         input.value = staged.map(f => f.name + ' (' + (f.size / 1048576).toFixed(2) + ' MB)').join(', ');
         input.placeholder = '';
@@ -365,12 +625,56 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && staged.length && !uploading) { staged = []; setMode(); } });
     $('picker').onchange = e => { stage(e.target.files); e.target.value = ''; };
 
+    /* ---------- slash commands ---------- */
+    const out = (text, cls = 'sys') => sys(text, cls);
+    const findNode = arg => { const n = parseInt(arg, 10); return Number.isInteger(n) ? n : null; };
+    function sendJSON(o) { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); else out('*** NO CARRIER ***', 'err'); }
+    const COMMANDS = {
+      help: ['', 'show this list', () => { for (const [n, c] of Object.entries(COMMANDS)) out('  /' + (n + ' ' + c[0]).trim().padEnd(22) + c[1]); out('  //text'.padEnd(25) + 'send a message that starts with /'); }],
+      msg: ['<node> [text]', 'private message (or just pick that node)', arg => {
+        const m = arg.match(/^(\d+)\s*(.*)$/s), n = m && +m[1];
+        if (!m) return out('*** usage: /msg <node> [text] ***', 'err');
+        if (n === myNode || !online.includes(n)) return out('*** NODE ' + pad(n) + ' is not online ***', 'err');
+        if (m[2]) sendJSON({ type: 'dm', to: n, text: m[2] });
+        else { to.value = n; setMode(); input.focus(); }
+      }],
+      to: ['<node|all>', 'choose who you are writing to', arg => {
+        if (/^all$/i.test(arg)) { to.value = ''; return setMode(); }
+        const n = findNode(arg);
+        if (n === null || n === myNode || !online.includes(n)) return out('*** usage: /to <online node number | all> ***', 'err');
+        to.value = n; setMode();
+      }],
+      me: ['<action>', 'send an action, e.g. /me waves', arg => {
+        if (!arg) return out('*** usage: /me <action> ***', 'err');
+        const text = '* ' + arg;
+        sendJSON(to.value ? { type: 'dm', to: +to.value, text } : { type: 'message', text });
+      }],
+      who: ['', 'list nodes that are online', () => out('ONLINE: ' + online.map(n => 'NODE ' + pad(n) + (n === myNode ? ' (you)' : '')).join(', '))],
+      clear: ['', 'clear the screen', () => feed.replaceChildren()],
+      sound: ['[on|off]', 'toggle sound', arg => update({ sound: arg ? /^on$/i.test(arg) : !cfg.sound })],
+      theme: ['[name]', 'set palette: ' + Object.keys(THEMES).join(', '), arg => {
+        if (THEMES[arg]) update({ theme: arg });
+        else out('*** themes: ' + Object.keys(THEMES).join(', ') + ' ***', 'err');
+      }],
+    };
+    const ALIASES = { w: 'msg', dm: 'msg', pm: 'msg', '?': 'help', cls: 'clear' };
+    function runCommand(line) {
+      const [, name, arg = ''] = line.match(/^\/(\S*)\s*(.*)$/s);
+      const cmd = COMMANDS[ALIASES[name.toLowerCase()] || name.toLowerCase()];
+      if (cmd) cmd[2](arg.trim()); else out('*** unknown command /' + name + ' - try /help ***', 'err');
+    }
+
     form.onsubmit = async e => {
       e.preventDefault();
       if (uploading) return;
       if (staged.length) { await uploadAll(); return; }
-      const text = input.value.trim();
-      if (text && ws.readyState === WebSocket.OPEN) { ws.send(text); input.value = ''; }
+      let text = input.value.trim();
+      if (text.startsWith('//')) text = text.slice(1);
+      else if (text.startsWith('/')) { input.value = ''; runCommand(text); input.focus(); return; }
+      if (text && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(to.value ? { type: 'dm', to: +to.value, text } : { type: 'message', text }));
+        input.value = '';
+      }
       input.focus();
     };
 

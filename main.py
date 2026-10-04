@@ -1,6 +1,10 @@
+import atexit
+import json
 import logging
-import re 
+import re
+import shutil
 import socket
+import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -11,7 +15,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 BASE_DIR = Path(__file__).parent
-UPLOAD_DIR = BASE_DIR / "uploads"
 STATIC_DIR = BASE_DIR / "static"
 LOG_FILE = BASE_DIR / "server.log"
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
@@ -19,7 +22,10 @@ MAX_MESSAGE_LEN = 5000
 CHUNK_SIZE = 1024 * 1024
 PORT = 8000
 
-UPLOAD_DIR.mkdir(exist_ok=True)
+# Uploads are temporary: they live in a throwaway temp dir that is removed on
+# exit. The log file (server.log) is the only thing kept on disk, on purpose.
+UPLOAD_DIR = Path(tempfile.mkdtemp(prefix="fastlan_"))
+atexit.register(shutil.rmtree, UPLOAD_DIR, ignore_errors=True)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,24 +39,36 @@ app = FastAPI(title="FastLAN")
 
 class ConnectionManager:
     def __init__(self):
-        self.active: list[WebSocket] = []
+        self.active: dict[WebSocket, int] = {}  # socket -> node number
 
-    async def connect(self, ws: WebSocket):
+    async def connect(self, ws: WebSocket, node: int):
         await ws.accept()
-        self.active.append(ws)
+        self.active[ws] = node
         log.info("Client connected: %s (total %d)", ws.client.host, len(self.active))
 
     def disconnect(self, ws: WebSocket):
-        if ws in self.active:
-            self.active.remove(ws)
-        log.info("Client disconnected: %s (total %d)", ws.client.host, len(self.active))
+        if self.active.pop(ws, None) is not None:
+            log.info("Client disconnected: %s (total %d)", ws.client.host, len(self.active))
 
-    async def broadcast(self, data: dict):
-        for ws in list(self.active):
+    def online(self) -> list[int]:
+        return sorted(set(self.active.values()))
+
+    async def send(self, sockets: list[WebSocket], data: dict):
+        for ws in sockets:
             try:
                 await ws.send_json(data)
             except Exception:
                 self.disconnect(ws)
+
+    async def broadcast(self, data: dict):
+        await self.send(list(self.active), data)
+
+    async def broadcast_users(self):
+        await self.broadcast({"type": "users", "nodes": self.online()})
+
+    async def send_to_nodes(self, nodes: set[int], data: dict):
+        """Deliver to every socket belonging to the given nodes."""
+        await self.send([ws for ws, n in self.active.items() if n in nodes], data)
 
 
 manager = ConnectionManager()
@@ -81,26 +99,44 @@ async def limit_upload_size(request: Request, call_next):
 
 @app.get("/")
 async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
-    await manager.connect(ws)
     node = node_for(ws.client.host)
+    await manager.connect(ws, node)
     try:
         await ws.send_json({"type": "hello", "node": node})
+        await manager.broadcast_users()
         while True:
-            text = (await ws.receive_text()).strip()
+            try:
+                msg = json.loads(await ws.receive_text())
+                text = str(msg.get("text", "")).strip()[:MAX_MESSAGE_LEN]
+            except (ValueError, AttributeError):
+                continue
             if not text:
                 continue
-            text = text[:MAX_MESSAGE_LEN]
-            log.info("Message from %s: %s", ws.client.host, text)
-            await manager.broadcast({"type": "message", "node": node, "text": text, "time": time.time()})
+            if msg.get("type") == "dm":
+                to = msg.get("to")
+                if not isinstance(to, int) or to == node:
+                    await ws.send_json({"type": "error", "text": "Invalid recipient"})
+                elif to not in manager.online():
+                    await ws.send_json({"type": "error", "text": f"NODE {to:02d} is not online"})
+                else:
+                    # private: log metadata only, never the content
+                    log.info("Private message from node %d to node %d", node, to)
+                    await manager.send_to_nodes(
+                        {node, to}, {"type": "dm", "from": node, "to": to, "text": text, "time": time.time()}
+                    )
+            else:
+                log.info("Message from %s: %s", ws.client.host, text)
+                await manager.broadcast({"type": "message", "node": node, "text": text, "time": time.time()})
     except WebSocketDisconnect:
         pass
     finally:
         manager.disconnect(ws)
+        await manager.broadcast_users()
 
 
 @app.post("/upload")
