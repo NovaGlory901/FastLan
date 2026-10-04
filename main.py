@@ -1,9 +1,6 @@
 import logging
-import re
-import atexit
-import shutil
+import re 
 import socket
-import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -14,18 +11,21 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 BASE_DIR = Path(__file__).parent
+UPLOAD_DIR = BASE_DIR / "uploads"
 STATIC_DIR = BASE_DIR / "static"
+LOG_FILE = BASE_DIR / "server.log"
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 MAX_MESSAGE_LEN = 5000
 CHUNK_SIZE = 1024 * 1024
 PORT = 8000
 
-# Nothing is saved permanently: uploads live in a throwaway temp dir that is
-# removed on exit, and logs go to the console only.
-UPLOAD_DIR = Path(tempfile.mkdtemp(prefix="fastlan_"))
-atexit.register(shutil.rmtree, UPLOAD_DIR, ignore_errors=True)
+UPLOAD_DIR.mkdir(exist_ok=True)
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler(LOG_FILE, encoding="utf-8")],
+)
 log = logging.getLogger("fastlan")
 
 app = FastAPI(title="FastLAN")
